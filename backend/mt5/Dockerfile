@@ -41,6 +41,16 @@ RUN mkdir -p /config/.wine /run/user/1000 && \
 WORKDIR /config
 RUN wget -O mt5setup.exe https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 
+# Copy application files and scripts
+COPY root/ /
+COPY scripts/ /scripts/
+COPY app/ /app/
+
+# Fix permissions and line endings
+RUN chmod +x /scripts/*.sh && \
+    dos2unix /scripts/*.sh && \
+    chown -R abc:abc /app /scripts /config
+
 # Install MT5 silently as abc user (with dbus and check)
 RUN dbus-uuidgen > /var/lib/dbus/machine-id && \
     su abc -c 'xvfb-run -a -s "-screen 0 1024x768x24" sh -c " \
