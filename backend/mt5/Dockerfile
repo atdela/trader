@@ -12,11 +12,12 @@ RUN sed -i '/backports/d' /etc/apt/sources.list || true && \
     rm -f /etc/apt/sources.list.d/*backports* || true
 
 # Install required packages
-RUN apt-get update && \
+RUN dpkg --add-architecture i386 && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
     wine64 \
-    wine32 \
+    wine32:i386 \
     winbind \
     cabextract \
     unzip \
