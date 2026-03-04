@@ -32,22 +32,25 @@ RUN dpkg --add-architecture i386 && \
     dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create Wine prefix
-RUN mkdir -p /config/.wine && \
-    chmod -R 777 /config
+# Create Wine prefix and runtime directories
+RUN mkdir -p /config/.wine /run/user/1000 && \
+    chown -R abc:abc /config /run/user/1000 && \
+    chmod -R 755 /config /run/user/1000
 
 # Download MT5
 WORKDIR /config
 RUN wget -O mt5setup.exe https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 
-# Install MT5 silently (with dbus and check)
-RUN xvfb-run -a -s "-screen 0 1024x768x24" sh -c " \
-    dbus-uuidgen > /var/lib/dbus/machine-id && \
+# Install MT5 silently as abc user (with dbus and check)
+RUN dbus-uuidgen > /var/lib/dbus/machine-id && \
+    su abc -c 'xvfb-run -a -s "-screen 0 1024x768x24" sh -c " \
+    export WINEDEBUG=-all && \
+    export WINEDLLOVERRIDES=\"mscoree,mshtml=\" && \
+    export XDG_RUNTIME_DIR=/run/user/1000 && \
     wineboot --init && sleep 15 && \
     wine mt5setup.exe /silent && \
     wineserver -w && \
-    sleep 5" && \
-    chown -R abc:abc /config/.wine
+    sleep 5"'
 
 # Verify installation
 RUN find /config/.wine -name "Terminal.exe" | grep "Terminal.exe" || (echo "MT5 Installation Failed!" && exit 1)
