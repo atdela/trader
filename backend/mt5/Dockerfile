@@ -32,10 +32,9 @@ RUN dpkg --add-architecture i386 && \
     dbus-x11 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create Wine prefix and set permissions
+# Create Wine prefix
 RUN mkdir -p /config/.wine && \
-    chown -R abc:abc /config && \
-    chmod -R 755 /config
+    chmod -R 777 /config
 
 # Download MT5
 WORKDIR /config
@@ -47,7 +46,8 @@ RUN xvfb-run -a -s "-screen 0 1024x768x24" sh -c " \
     wineboot --init && sleep 15 && \
     wine mt5setup.exe /silent && \
     wineserver -w && \
-    sleep 5"
+    sleep 5" && \
+    chown -R abc:abc /config/.wine
 
 # Verify installation
 RUN find /config/.wine -name "Terminal.exe" | grep "Terminal.exe" || (echo "MT5 Installation Failed!" && exit 1)
