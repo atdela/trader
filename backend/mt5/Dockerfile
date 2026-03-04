@@ -16,6 +16,7 @@ RUN dpkg --add-architecture i386 && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     wget \
+    wine \
     wine64 \
     wine32:i386 \
     winbind \
