@@ -39,9 +39,9 @@ WORKDIR /config
 RUN wget -O mt5setup.exe https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 
 # Install MT5 silently
-RUN wineboot --init && \
+RUN xvfb-run wineboot --init && \
     sleep 5 && \
-    wine mt5setup.exe /silent
+    xvfb-run wine mt5setup.exe /silent
 
 # Expose VNC port
 EXPOSE 3000
