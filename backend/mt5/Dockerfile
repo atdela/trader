@@ -38,8 +38,8 @@ RUN mkdir -p /config/.wine
 WORKDIR /config
 RUN wget -O mt5setup.exe https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe
 
-# Install MT5 silently
-RUN xvfb-run -a sh -c "wineboot --init && sleep 10 && wine mt5setup.exe /silent && wineserver -w"
+# Install MT5 silently (Forcing rebuild with explicit xvfb session)
+RUN xvfb-run -a -s "-screen 0 1024x768x24" sh -c "wineboot --init && sleep 15 && wine mt5setup.exe /silent && wineserver -w && sleep 5"
 
 # Expose VNC port
 EXPOSE 3000
