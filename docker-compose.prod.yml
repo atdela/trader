@@ -4,9 +4,10 @@ services:
   traefik:
     image: traefik:v2.11
     container_name: traefik
-    restart: always
+    restart: unless-stopped
     command:
       - "--api.dashboard=true"
+      - "--api.insecure=false"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
@@ -20,41 +21,52 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_data:/letsencrypt
+    networks:
+      - appnet
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DOMAIN}`)"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.rule=Host(`${TRAEFIK_DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - appnet
 
-  mt5:
-    build: .
-    restart: always
-    environment:
-      - CUSTOM_USER=${CUSTOM_USER}
-      - PASSWORD=${PASSWORD}
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
     networks:
       - appnet
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mt5.rule=Host(`${VNC_DOMAIN}`)"
-      - "traefik.http.routers.mt5.entrypoints=websecure"
-      - "traefik.http.routers.mt5.tls.certresolver=letsencrypt"
-      - "traefik.http.services.mt5.loadbalancer.server.port=6080"
 
   django:
-    build: ./backend
-    restart: always
-    command: gunicorn core.wsgi:application --bind 0.0.0.0:8000
+    build:
+      context: ./backend/django
+    restart: unless-stopped
+    command: >
+      sh -c "
+      python manage.py migrate &&
+      python manage.py collectstatic --noinput &&
+      gunicorn app.wsgi:application --bind 0.0.0.0:8000 --workers 3
+      "
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - MT5_API_URL=${MT5_API_URL}
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      MT5_API_URL: http://mt5:5001
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       - postgres
       - redis
@@ -66,41 +78,43 @@ services:
       - "traefik.http.routers.django.entrypoints=websecure"
       - "traefik.http.routers.django.tls.certresolver=letsencrypt"
       - "traefik.http.services.django.loadbalancer.server.port=8000"
+      - "traefik.docker.network=appnet"
 
   celery:
-    build: ./backend
-    restart: always
-    command: celery -A core worker -l info
+    build:
+      context: ./backend/django
+    restart: unless-stopped
+    command: celery -A app worker -l info
     environment:
-      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
-      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      POSTGRES_HOST: postgres
     depends_on:
       - redis
-      - django
+      - postgres
     networks:
       - appnet
 
-  postgres:
-    image: postgres:15
-    restart: always
+  mt5:
+    build:
+      context: ./backend/mt5
+    restart: unless-stopped
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      CUSTOM_USER: ${CUSTOM_USER}
+      PASSWORD: ${PASSWORD}
     networks:
       - appnet
-
-  redis:
-    image: redis:7
-    restart: always
-    networks:
-      - appnet
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mt5.rule=Host(`${VNC_DOMAIN}`)"
+      - "traefik.http.routers.mt5.entrypoints=websecure"
+      - "traefik.http.routers.mt5.tls.certresolver=letsencrypt"
+      - "traefik.http.services.mt5.loadbalancer.server.port=6080"
+      - "traefik.docker.network=appnet"
 
   grafana:
     image: grafana/grafana:latest
-    restart: always
+    restart: unless-stopped
     volumes:
       - grafana_data:/var/lib/grafana
     networks:
