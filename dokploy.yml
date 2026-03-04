@@ -1,0 +1,9 @@
+app: mt5-production
+deploy:
+  method: docker_compose
+  compose_file: docker-compose.prod.yml
+
+environments:
+  production:
+    branch: main
+    env_file: .env.prod
